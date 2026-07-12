@@ -1,0 +1,5 @@
+{
+  "name": "salvify",
+  "private": true,
+  "workspaces": ["server", "client"]
+}

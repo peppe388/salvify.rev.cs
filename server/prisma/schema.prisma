@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id          Int               @id @default(autoincrement())
+  email       String            @unique
+  name        String
+  password    String
+  currency    String            @default("€")
+  budget      Float             @default(0)
+  autoLock    Int               @default(60)
+  hideBalance Boolean           @default(false)
+  roundUp     Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  transactions Transaction[]
+  pockets     Pocket[]
+  goals       Goal[]
+  categories  Category[]
+  budgets     CategoryBudget[]
+}
+
+model Transaction {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tipo      String
+  importo   Float
+  categoria String
+  nota      String
+  data      String
+  pocketId  Int?
+  isRoundUp Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pocket    Pocket?  @relation(fields: [pocketId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+}
+
+model Pocket {
+  id           Int           @id @default(autoincrement())
+  userId       Int
+  nome         String
+  colore       String        @default("purple")
+  saldo        Float         @default(0)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+}
+
+model Goal {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  nome      String
+  target    Float
+  attuale   Float    @default(0)
+  scadenza  String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id     Int    @id @default(autoincrement())
+  userId Int
+  nome   String
+  icona  String
+  tipo   String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, nome])
+}
+
+model CategoryBudget {
+  id        Int    @id @default(autoincrement())
+  userId    Int
+  categoria String
+  budget    Float
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, categoria])
+}
