@@ -9,9 +9,6 @@ on:
 jobs:
   server:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: server
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,16 +17,14 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
       - run: npm ci
-        working-directory: .
       - run: npx prisma generate
+        working-directory: server
       - run: npx prisma db push
-      - run: npm run build
+        working-directory: server
+      - run: npm -w server run build
 
   client:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: client
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,5 +33,4 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
       - run: npm ci
-        working-directory: .
-      - run: npm run build
+      - run: npm -w client run build
