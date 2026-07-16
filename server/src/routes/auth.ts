@@ -7,14 +7,14 @@ import { z } from 'zod'
 const router = Router()
 
 const registerSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1).max(100),
-  password: z.string().min(8).max(128),
+  email: z.string().email('Inserisci un email valida'),
+  name: z.string().min(1, 'Il nome è obbligatorio').max(100),
+  password: z.string().min(8, 'La password deve avere almeno 8 caratteri').max(128),
 })
 
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string(),
+  email: z.string().email('Inserisci un email valida'),
+  password: z.string().min(1, 'Inserisci la password'),
 })
 
 const profileSchema = z.object({
@@ -31,8 +31,8 @@ const passwordSchema = z.object({
   newPassword: z.string().min(8).max(128),
 })
 
-function sanitizeUser(user: { id: number; email: string; name: string; currency: string; budget: number; autoLock: number; hideBalance: boolean; roundUp: boolean }) {
-  return user
+function sanitizeUser(user: { id: number; email: string; name: string; currency: string; budget: number; autoLock: number; hideBalance: boolean; roundUp: boolean; createdAt: Date }) {
+  return { id: user.id, email: user.email, name: user.name, currency: user.currency, budget: user.budget, autoLock: user.autoLock, hideBalance: user.hideBalance, roundUp: user.roundUp, createdAt: user.createdAt }
 }
 
 router.post('/register', async (req: Request, res: Response) => {
@@ -47,7 +47,7 @@ router.post('/register', async (req: Request, res: Response) => {
     const token = generateToken(user.id)
     res.status(201).json({ token, user: sanitizeUser(user) })
   } catch (err: unknown) {
-    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.issues.map(i => i.message).join(', ') }); return }
     console.error('Register error:', err); res.status(500).json({ error: 'Registration failed' })
   }
 })
@@ -62,7 +62,7 @@ router.post('/login', async (req: Request, res: Response) => {
     const token = generateToken(user.id)
     res.json({ token, user: sanitizeUser(user) })
   } catch (err: unknown) {
-    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.issues.map(i => i.message).join(', ') }); return }
     console.error('Login error:', err); res.status(500).json({ error: 'Login failed' })
   }
 })
@@ -84,7 +84,7 @@ router.put('/profile', authMiddleware, async (req: AuthRequest, res: Response) =
     const user = await prisma.user.update({ where: { id: req.userId }, data: body })
     res.json(user)
   } catch (err: unknown) {
-    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.issues.map(i => i.message).join(', ') }); return }
     console.error('UpdateProfile error:', err); res.status(500).json({ error: 'Failed to update profile' })
   }
 })
@@ -100,7 +100,7 @@ router.put('/password', authMiddleware, async (req: AuthRequest, res: Response) 
     await prisma.user.update({ where: { id: req.userId }, data: { password: hashed } })
     res.json({ success: true })
   } catch (err: unknown) {
-    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.issues.map(i => i.message).join(', ') }); return }
     console.error('ChangePassword error:', err); res.status(500).json({ error: 'Failed to change password' })
   }
 })

@@ -33,7 +33,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     })
     res.status(201).json(pocket)
   } catch (err: unknown) {
-    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.issues.map(i => i.message).join(', ') }); return }
     console.error('CreatePocket error:', err); res.status(500).json({ error: 'Failed' })
   }
 })
@@ -50,7 +50,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     })
     res.json(updated)
   } catch (err: unknown) {
-    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.issues.map(i => i.message).join(', ') }); return }
     console.error('UpdatePocket error:', err); res.status(500).json({ error: 'Failed' })
   }
 })

@@ -93,7 +93,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
     res.status(201).json(t)
   } catch (err: unknown) {
-    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.issues.map(i => i.message).join(', ') }); return }
     console.error('CreateTransaction error:', err)
     res.status(500).json({ error: 'Failed to create transaction' })
   }
@@ -119,7 +119,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     })
     res.json(updated)
   } catch (err: unknown) {
-    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.issues.map(i => i.message).join(', ') }); return }
     console.error('UpdateTransaction error:', err)
     res.status(500).json({ error: 'Failed' })
   }

@@ -36,7 +36,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     })
     res.status(201).json(goal)
   } catch (err: unknown) {
-    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.issues.map(i => i.message).join(', ') }); return }
     console.error('CreateGoal error:', err); res.status(500).json({ error: 'Failed' })
   }
 })
@@ -58,7 +58,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
     })
     res.json(updated)
   } catch (err: unknown) {
-    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.issues.map(i => i.message).join(', ') }); return }
     console.error('UpdateGoal error:', err); res.status(500).json({ error: 'Failed' })
   }
 })
