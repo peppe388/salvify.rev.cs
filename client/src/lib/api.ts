@@ -76,6 +76,25 @@ interface CategoryInput {
   tipo: string
 }
 
+export interface PaginatedResponse<T> {
+  data: T[]
+  total: number
+  page: number
+  limit: number
+  pages: number
+}
+
+export async function getAllTransactions(): Promise<import('./types').Transaction[]> {
+  const first = await api.getTransactions(1, 100)
+  if (first.pages <= 1) return first.data
+  const pages: import('./types').Transaction[] = [...first.data]
+  for (let p = 2; p <= first.pages; p++) {
+    const next = await api.getTransactions(p, 100)
+    pages.push(...next.data)
+  }
+  return pages
+}
+
 export const api = {
   // Auth
   login: (email: string, password: string) =>
@@ -85,11 +104,16 @@ export const api = {
   getMe: () => request<import('./types').User>('/auth/me'),
   updateProfile: (data: Partial<import('./types').User>) =>
     request<import('./types').User>('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ success: boolean }>('/auth/password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) }),
 
   // Transactions
-  getTransactions: () => request<import('./types').Transaction[]>('/transactions'),
+  getTransactions: (page = 1, limit = 50) =>
+    request<PaginatedResponse<import('./types').Transaction>>(`/transactions?page=${page}&limit=${limit}`),
   createTransaction: (data: TransactionInput) =>
     request<import('./types').Transaction>('/transactions', { method: 'POST', body: JSON.stringify(data) }),
+  updateTransaction: (id: number, data: Partial<TransactionInput>) =>
+    request<import('./types').Transaction>(`/transactions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTransaction: (id: number) =>
     request<{ success: boolean }>(`/transactions/${id}`, { method: 'DELETE' }),
 
@@ -97,6 +121,8 @@ export const api = {
   getPockets: () => request<import('./types').Pocket[]>('/pockets'),
   createPocket: (data: PocketInput) =>
     request<import('./types').Pocket>('/pockets', { method: 'POST', body: JSON.stringify(data) }),
+  updatePocket: (id: number, data: Partial<PocketInput>) =>
+    request<import('./types').Pocket>(`/pockets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deletePocket: (id: number) =>
     request<{ success: boolean }>(`/pockets/${id}`, { method: 'DELETE' }),
 
@@ -104,7 +130,9 @@ export const api = {
   getGoals: () => request<import('./types').Goal[]>('/goals'),
   createGoal: (data: GoalInput) =>
     request<import('./types').Goal>('/goals', { method: 'POST', body: JSON.stringify(data) }),
-  updateGoal: (id: number, delta: number) =>
+  updateGoal: (id: number, data: Partial<GoalInput & { attuale: number }>) =>
+    request<import('./types').Goal>(`/goals/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  addToGoal: (id: number, delta: number) =>
     request<import('./types').Goal>(`/goals/${id}`, { method: 'PATCH', body: JSON.stringify({ delta }) }),
   deleteGoal: (id: number) =>
     request<{ success: boolean }>(`/goals/${id}`, { method: 'DELETE' }),
@@ -113,6 +141,8 @@ export const api = {
   getCategories: () => request<import('./types').Category[]>('/categories'),
   createCategory: (data: CategoryInput) =>
     request<import('./types').Category>('/categories', { method: 'POST', body: JSON.stringify(data) }),
+  updateCategory: (id: number, data: Partial<CategoryInput>) =>
+    request<import('./types').Category>(`/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
   // Budgets
   getBudgets: () => request<import('./types').CategoryBudget[]>('/budgets'),

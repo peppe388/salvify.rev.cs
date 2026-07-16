@@ -1,8 +1,14 @@
 import { Router, Response } from 'express'
 import { AuthRequest } from '../middleware/auth'
 import prisma from '../lib/prisma'
+import { z } from 'zod'
 
 const router = Router()
+
+const setSchema = z.object({
+  categoria: z.string().min(1),
+  budget: z.number().min(0),
+})
 
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
@@ -13,24 +19,26 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
 router.put('/', async (req: AuthRequest, res: Response) => {
   try {
-    const { categoria, budget } = req.body
-    if (!categoria || budget === undefined) { res.status(400).json({ error: 'categoria and budget required' }); return }
+    const body = setSchema.parse(req.body)
     const existing = await prisma.categoryBudget.findUnique({
-      where: { userId_categoria: { userId: req.userId!, categoria } }
+      where: { userId_categoria: { userId: req.userId!, categoria: body.categoria } }
     })
     if (existing) {
       const updated = await prisma.categoryBudget.update({
         where: { id: existing.id },
-        data: { budget }
+        data: { budget: body.budget }
       })
       res.json(updated)
     } else {
       const created = await prisma.categoryBudget.create({
-        data: { userId: req.userId!, categoria, budget }
+        data: { userId: req.userId!, categoria: body.categoria, budget: body.budget }
       })
       res.status(201).json(created)
     }
-  } catch (err) { console.error('SetBudget error:', err); res.status(500).json({ error: 'Failed' }) }
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    console.error('SetBudget error:', err); res.status(500).json({ error: 'Failed' })
+  }
 })
 
 router.delete('/:categoria', async (req: AuthRequest, res: Response) => {

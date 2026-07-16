@@ -2,61 +2,68 @@ import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import prisma from '../lib/prisma'
 import { generateToken, authMiddleware, AuthRequest } from '../middleware/auth'
+import { z } from 'zod'
 
 const router = Router()
 
+const registerSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1).max(100),
+  password: z.string().min(8).max(128),
+})
+
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string(),
+})
+
+const profileSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  currency: z.string().optional(),
+  budget: z.number().min(0).optional(),
+  autoLock: z.number().min(0).optional(),
+  hideBalance: z.boolean().optional(),
+  roundUp: z.boolean().optional(),
+})
+
+const passwordSchema = z.object({
+  currentPassword: z.string(),
+  newPassword: z.string().min(8).max(128),
+})
+
+function sanitizeUser(user: { id: number; email: string; name: string; currency: string; budget: number; autoLock: number; hideBalance: boolean; roundUp: boolean }) {
+  return user
+}
+
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { email, name, password } = req.body
-    if (!email || !name || !password) {
-      res.status(400).json({ error: 'Email, name and password required' })
-      return
-    }
-    const existing = await prisma.user.findUnique({ where: { email } })
-    if (existing) {
-      res.status(409).json({ error: 'Email already registered' })
-      return
-    }
-    const hashed = await bcrypt.hash(password, 10)
+    const body = registerSchema.parse(req.body)
+    const existing = await prisma.user.findUnique({ where: { email: body.email } })
+    if (existing) { res.status(409).json({ error: 'Email already registered' }); return }
+    const hashed = await bcrypt.hash(body.password, 10)
     const user = await prisma.user.create({
-      data: { email, name, password: hashed }
+      data: { email: body.email, name: body.name, password: hashed }
     })
     const token = generateToken(user.id)
-    res.status(201).json({
-      token,
-      user: { id: user.id, email: user.email, name: user.name, currency: user.currency, budget: user.budget, autoLock: user.autoLock, hideBalance: user.hideBalance, roundUp: user.roundUp }
-    })
-  } catch (err) {
-    console.error('Register error:', err)
-    res.status(500).json({ error: 'Registration failed' })
+    res.status(201).json({ token, user: sanitizeUser(user) })
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    console.error('Register error:', err); res.status(500).json({ error: 'Registration failed' })
   }
 })
 
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body
-    if (!email || !password) {
-      res.status(400).json({ error: 'Email and password required' })
-      return
-    }
-    const user = await prisma.user.findUnique({ where: { email } })
-    if (!user) {
-      res.status(401).json({ error: 'Invalid credentials' })
-      return
-    }
-    const valid = await bcrypt.compare(password, user.password)
-    if (!valid) {
-      res.status(401).json({ error: 'Invalid credentials' })
-      return
-    }
+    const body = loginSchema.parse(req.body)
+    const user = await prisma.user.findUnique({ where: { email: body.email } })
+    if (!user) { res.status(401).json({ error: 'Invalid credentials' }); return }
+    const valid = await bcrypt.compare(body.password, user.password)
+    if (!valid) { res.status(401).json({ error: 'Invalid credentials' }); return }
     const token = generateToken(user.id)
-    res.json({
-      token,
-      user: { id: user.id, email: user.email, name: user.name, currency: user.currency, budget: user.budget, autoLock: user.autoLock, hideBalance: user.hideBalance, roundUp: user.roundUp }
-    })
-  } catch (err) {
-    console.error('Login error:', err)
-    res.status(500).json({ error: 'Login failed' })
+    res.json({ token, user: sanitizeUser(user) })
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    console.error('Login error:', err); res.status(500).json({ error: 'Login failed' })
   }
 })
 
@@ -73,17 +80,29 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
 
 router.put('/profile', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, currency, budget, autoLock, hideBalance, roundUp } = req.body
-    const data: any = {}
-    if (name !== undefined) data.name = name
-    if (currency !== undefined) data.currency = currency
-    if (budget !== undefined) data.budget = budget
-    if (autoLock !== undefined) data.autoLock = autoLock
-    if (hideBalance !== undefined) data.hideBalance = hideBalance
-    if (roundUp !== undefined) data.roundUp = roundUp
-    const user = await prisma.user.update({ where: { id: req.userId }, data })
+    const body = profileSchema.parse(req.body)
+    const user = await prisma.user.update({ where: { id: req.userId }, data: body })
     res.json(user)
-  } catch (err) { console.error('UpdateProfile error:', err); res.status(500).json({ error: 'Failed to update profile' }) }
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    console.error('UpdateProfile error:', err); res.status(500).json({ error: 'Failed to update profile' })
+  }
+})
+
+router.put('/password', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const body = passwordSchema.parse(req.body)
+    const user = await prisma.user.findUnique({ where: { id: req.userId } })
+    if (!user) { res.status(404).json({ error: 'User not found' }); return }
+    const valid = await bcrypt.compare(body.currentPassword, user.password)
+    if (!valid) { res.status(401).json({ error: 'Current password is incorrect' }); return }
+    const hashed = await bcrypt.hash(body.newPassword, 10)
+    await prisma.user.update({ where: { id: req.userId }, data: { password: hashed } })
+    res.json({ success: true })
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    console.error('ChangePassword error:', err); res.status(500).json({ error: 'Failed to change password' })
+  }
 })
 
 export default router

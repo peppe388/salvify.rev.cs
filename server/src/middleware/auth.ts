@@ -1,14 +1,19 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'salvify-dev-secret-change-in-production'
+function getSecret(): string {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is required')
+  }
+  return process.env.JWT_SECRET
+}
 
 export interface AuthRequest extends Request {
   userId?: number
 }
 
 export function generateToken(userId: number): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' })
+  return jwt.sign({ userId }, getSecret(), { expiresIn: '7d' })
 }
 
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
@@ -19,7 +24,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   }
   try {
     const token = header.split(' ')[1]
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number }
+    const decoded = jwt.verify(token, getSecret()) as { userId: number }
     req.userId = decoded.userId
     next()
   } catch {

@@ -1,6 +1,6 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { api, getAllTransactions } from '@/lib/api'
 import AppShell from '@/components/AppShell'
 import InsightGrid from '@/components/InsightGrid'
 import { CategoryChart, MonthlyChart } from '@/components/Charts'
@@ -19,7 +19,7 @@ export default function StatsPage() {
 function StatsContent() {
   const { data: transactions = [], isLoading: txLoading } = useQuery({
     queryKey: ['transactions'],
-    queryFn: api.getTransactions,
+    queryFn: () => getAllTransactions(),
   })
 
   const { data: categories = [], isLoading: catLoading } = useQuery({

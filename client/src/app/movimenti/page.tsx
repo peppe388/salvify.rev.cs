@@ -3,13 +3,16 @@ import { useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { api } from '@/lib/api'
+import { api, getAllTransactions } from '@/lib/api'
 import AppShell from '@/components/AppShell'
 import TransactionItem from '@/components/TransactionItem'
+import EditTransactionModal from '@/components/EditTransactionModal'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { SkeletonList, SkeletonCard } from '@/components/ui/Skeleton'
 import { AuthGuard } from '@/components/AuthGuard'
-import { Search, Filter } from 'lucide-react'
+import { useConfirm } from '@/components/ConfirmDialog'
+import { Search, Filter, Pencil } from 'lucide-react'
+import type { Transaction } from '@/lib/types'
 
 export default function MovimentiPage() {
   return (
@@ -22,12 +25,14 @@ export default function MovimentiPage() {
 function MovimentiContent() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const { confirm, dialog } = useConfirm()
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('all')
+  const [editing, setEditing] = useState<Transaction | null>(null)
 
   const { data: transactions = [], isLoading: txLoading } = useQuery({
     queryKey: ['transactions'],
-    queryFn: api.getTransactions,
+    queryFn: () => getAllTransactions(),
   })
 
   const { data: categories = [] } = useQuery({
@@ -51,8 +56,9 @@ function MovimentiContent() {
   if (search) list = list.filter(t => t.nota.toLowerCase().includes(search.toLowerCase()) || t.categoria.toLowerCase().includes(search.toLowerCase()))
   if (filterCat !== 'all') list = list.filter(t => t.categoria === filterCat)
 
-  function deleteTransaction(id: number) {
-    if (!window.confirm('Eliminare questa transazione?')) return
+  async function deleteTransaction(id: number) {
+    const ok = await confirm({ title: 'Elimina transazione', message: 'Sei sicuro di voler eliminare questa transazione?', confirmLabel: 'Elimina', variant: 'danger' })
+    if (!ok) return
     deleteMutation.mutate(id)
   }
 
@@ -70,6 +76,7 @@ function MovimentiContent() {
 
   return (
     <AppShell>
+      {dialog}
       <div className="animate-fade-in">
         <h2 className="text-lg font-bold text-text mb-5">Movimenti</h2>
 
@@ -98,11 +105,29 @@ function MovimentiContent() {
         ) : (
           <div>
             {list.map(t => (
-              <TransactionItem key={t.id} t={t} currency={currency} onDelete={deleteTransaction} hideAmount={hide} />
+              <div key={t.id} className="flex items-center gap-1 group">
+                <button
+                  onClick={() => setEditing(t)}
+                  className="text-text-dim hover:text-brand-500 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                >
+                  <Pencil size={13} />
+                </button>
+                <div className="flex-1">
+                  <TransactionItem t={t} currency={currency} onDelete={deleteTransaction} hideAmount={hide} />
+                </div>
+              </div>
             ))}
           </div>
         )}
       </div>
+
+      {editing && (
+        <EditTransactionModal
+          transaction={editing}
+          categories={categories}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </AppShell>
   )
 }

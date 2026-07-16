@@ -4,6 +4,7 @@ import "./globals.css"
 import { AuthProvider } from "@/lib/auth"
 import { ThemeProvider } from "@/lib/theme"
 import { QueryProvider } from "@/lib/query"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { Toaster } from "sonner"
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] })
@@ -21,7 +22,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <QueryProvider>
             <AuthProvider>
-              {children}
+              <ErrorBoundary>
+                {children}
+              </ErrorBoundary>
               <Toaster
                 position="top-right"
                 richColors

@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
-import { api } from '@/lib/api'
+import { api, getAllTransactions } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
@@ -47,7 +47,7 @@ function DashboardContent() {
 
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ['transactions'],
-    queryFn: api.getTransactions,
+    queryFn: () => getAllTransactions(),
   })
 
   const deleteMutation = useMutation({

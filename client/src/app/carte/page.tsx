@@ -13,6 +13,7 @@ import { Select } from '@/components/ui/Select'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { AuthGuard } from '@/components/AuthGuard'
+import { useConfirm } from '@/components/ConfirmDialog'
 import { CreditCard, Plus } from 'lucide-react'
 
 const colors = [
@@ -34,6 +35,7 @@ export default function CartePage() {
 function CarteContent() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const { confirm, dialog } = useConfirm()
   const [nome, setNome] = useState('')
   const [colore, setColore] = useState('purple')
 
@@ -71,8 +73,9 @@ function CarteContent() {
     createMutation.mutate({ nome: nome.trim(), colore })
   }
 
-  function handleDelete(id: number) {
-    if (!window.confirm('Eliminare questo pocket?')) return
+  async function handleDelete(id: number) {
+    const ok = await confirm({ title: 'Elimina pocket', message: 'Sei sicuro di voler eliminare questo pocket?', confirmLabel: 'Elimina', variant: 'danger' })
+    if (!ok) return
     deleteMutation.mutate(id)
   }
 
@@ -90,6 +93,7 @@ function CarteContent() {
 
   return (
     <AppShell>
+      {dialog}
       <div className="animate-fade-in">
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-lg font-bold text-text">I tuoi pocket</h2>

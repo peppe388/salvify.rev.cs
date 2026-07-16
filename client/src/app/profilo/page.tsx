@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { api } from '@/lib/api'
+import { api, getAllTransactions } from '@/lib/api'
 import { CategoryBudget } from '@/lib/types'
 import AppShell from '@/components/AppShell'
 import GoalCard from '@/components/GoalCard'
@@ -13,7 +13,8 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { AuthGuard } from '@/components/AuthGuard'
-import { LogOut, RotateCcw, Target, Wallet, PiggyBank } from 'lucide-react'
+import { useConfirm } from '@/components/ConfirmDialog'
+import { LogOut, RotateCcw, Target, Wallet, PiggyBank, Lock } from 'lucide-react'
 import { getCategoryIcon, getCategoryColor } from '@/lib/categoryIcons'
 
 export default function ProfiloPage() {
@@ -28,6 +29,7 @@ function ProfiloContent() {
   const { user, logout, refreshUser } = useAuth()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { confirm, dialog } = useConfirm()
 
   const [name, setName] = useState('')
   const [currency, setCurrency] = useState('€')
@@ -40,9 +42,13 @@ function ProfiloContent() {
   const [goalTarget, setGoalTarget] = useState('')
   const [goalDate, setGoalDate] = useState('')
 
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+
   const { data: transactions = [] } = useQuery({
     queryKey: ['transactions'],
-    queryFn: api.getTransactions,
+    queryFn: () => getAllTransactions(),
   })
 
   const { data: categories = [] } = useQuery({
@@ -79,6 +85,18 @@ function ProfiloContent() {
     onError: (err: Error) => toast.error(err.message),
   })
 
+  const changePasswordMutation = useMutation({
+    mutationFn: ({ currentPassword, newPassword }: { currentPassword: string; newPassword: string }) =>
+      api.changePassword(currentPassword, newPassword),
+    onSuccess: () => {
+      toast.success('Password cambiata')
+      setShowPasswordForm(false)
+      setCurrentPassword('')
+      setNewPassword('')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
   const createGoalMutation = useMutation({
     mutationFn: (data: { nome: string; target: number; scadenza: string }) => api.createGoal(data),
     onSuccess: () => {
@@ -99,7 +117,7 @@ function ProfiloContent() {
   })
 
   const updateGoalMutation = useMutation({
-    mutationFn: ({ id, delta }: { id: number; delta: number }) => api.updateGoal(id, delta),
+    mutationFn: ({ id, delta }: { id: number; delta: number }) => api.addToGoal(id, delta),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] })
       toast.success('Obiettivo aggiornato')
@@ -114,12 +132,20 @@ function ProfiloContent() {
   function handleLogout() { logout(); router.push('/login') }
 
   async function handleReset() {
-    if (!window.confirm('Sei sicuro? Tutti i dati verranno cancellati!')) return
-    for (const t of await api.getTransactions()) await api.deleteTransaction(t.id).catch(() => {})
+    const ok = await confirm({ title: 'Reset dati', message: 'Sei sicuro? Tutti i dati verranno cancellati!', confirmLabel: 'Cancella tutto', variant: 'danger' })
+    if (!ok) return
+    const allTx = await getAllTransactions()
+    for (const t of allTx) await api.deleteTransaction(t.id).catch(() => {})
     for (const p of await api.getPockets()) await api.deletePocket(p.id).catch(() => {})
     for (const g of await api.getGoals()) await api.deleteGoal(g.id).catch(() => {})
     toast.success('Dati cancellati')
     queryClient.invalidateQueries()
+  }
+
+  function handleChangePassword() {
+    if (!currentPassword || !newPassword) { toast.error('Compila tutti i campi'); return }
+    if (newPassword.length < 8) { toast.error('La nuova password deve essere di almeno 8 caratteri'); return }
+    changePasswordMutation.mutate({ currentPassword, newPassword })
   }
 
   function handleAddGoal() {
@@ -127,8 +153,9 @@ function ProfiloContent() {
     createGoalMutation.mutate({ nome: goalName.trim(), target: parseFloat(goalTarget), scadenza: goalDate })
   }
 
-  function handleDeleteGoal(id: number) {
-    if (!window.confirm('Eliminare questo obiettivo?')) return
+  async function handleDeleteGoal(id: number) {
+    const ok = await confirm({ title: 'Elimina obiettivo', message: 'Sei sicuro di voler eliminare questo obiettivo?', confirmLabel: 'Elimina', variant: 'danger' })
+    if (!ok) return
     deleteGoalMutation.mutate(id)
   }
 
@@ -146,8 +173,8 @@ function ProfiloContent() {
       }
       queryClient.invalidateQueries({ queryKey: ['budgets'] })
       toast.success('Budget aggiornato')
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err: unknown) {
+      if (err instanceof Error) toast.error(err.message)
     }
   }
 
@@ -169,6 +196,7 @@ function ProfiloContent() {
 
   return (
     <AppShell>
+      {dialog}
       <div className="animate-fade-in">
         <h2 className="text-lg font-bold text-text mb-5">Profilo</h2>
 
@@ -210,6 +238,31 @@ function ProfiloContent() {
               <Toggle checked={hide} onChange={() => { setHide(!hide); updateProfileMutation.mutate({ hideBalance: !hide }) }} />
             </SettingRow>
           </div>
+        </Card>
+
+        <Card className="!p-5 mb-4">
+          <h3 className="text-sm font-semibold text-text mb-4 flex items-center gap-2">
+            <Lock size={16} className="text-brand-500" />
+            Sicurezza
+          </h3>
+          {!showPasswordForm ? (
+            <Button variant="secondary" onClick={() => setShowPasswordForm(true)} className="w-full">
+              Cambia password
+            </Button>
+          ) : (
+            <div className="space-y-3">
+              <Input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Password attuale" />
+              <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nuova password (min 8 caratteri)" />
+              <div className="flex gap-2">
+                <Button onClick={handleChangePassword} loading={changePasswordMutation.isPending} className="flex-1">
+                  Salva
+                </Button>
+                <Button variant="secondary" onClick={() => { setShowPasswordForm(false); setCurrentPassword(''); setNewPassword('') }} className="flex-none">
+                  Annulla
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
 
         <Card className="!p-5 mb-4">

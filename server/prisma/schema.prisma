@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL") == "" ? "file:./dev.db" : env("DATABASE_URL")
 }
 
 model User {
@@ -38,6 +38,9 @@ model Transaction {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   pocket    Pocket?  @relation(fields: [pocketId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, data])
 }
 
 model Pocket {
@@ -48,6 +51,8 @@ model Pocket {
   saldo        Float         @default(0)
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+
+  @@index([userId])
 }
 
 model Goal {
@@ -59,6 +64,8 @@ model Goal {
   scadenza  String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Category {
@@ -69,6 +76,7 @@ model Category {
   tipo   String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@unique([userId, nome])
+  @@index([userId])
 }
 
 model CategoryBudget {
@@ -78,4 +86,5 @@ model CategoryBudget {
   budget    Float
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@unique([userId, categoria])
+  @@index([userId])
 }
