@@ -1,11 +1,16 @@
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+const API = process.env.NEXT_PUBLIC_API_URL || '/api'
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null
   return localStorage.getItem('salvify_token')
 }
 
-async function request(path: string, options: RequestInit = {}) {
+interface ApiError {
+  error: string
+  errors?: unknown[]
+}
+
+async function request<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -13,56 +18,106 @@ async function request(path: string, options: RequestInit = {}) {
   }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const res = await fetch(`${API}${path}`, { ...options, headers })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Request failed' }))
-    throw new Error(err.error || `HTTP ${res.status}`)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15000)
+
+  try {
+    const res = await fetch(`${API}${path}`, { ...options, headers, signal: controller.signal })
+    if (!res.ok) {
+      const err: ApiError = await res.json().catch(() => ({ error: 'Request failed' }))
+      throw new Error(err.error || `HTTP ${res.status}`)
+    }
+    return res.json()
+  } catch (err: unknown) {
+    if (err instanceof Error) throw err
+    throw new Error('Unknown error')
+  } finally {
+    clearTimeout(timeout)
   }
-  return res.json()
+}
+
+export interface LoginResponse {
+  token: string
+  user: {
+    id: number
+    email: string
+    name: string
+    currency: string
+    budget: number
+    autoLock: number
+    hideBalance: boolean
+    roundUp: boolean
+  }
+}
+
+interface TransactionInput {
+  tipo: string
+  importo: number
+  categoria: string
+  nota: string
+  data: string
+  pocketId: number | null
+}
+
+interface PocketInput {
+  nome: string
+  colore: string
+}
+
+interface GoalInput {
+  nome: string
+  target: number
+  scadenza: string
+}
+
+interface CategoryInput {
+  nome: string
+  icona: string
+  tipo: string
 }
 
 export const api = {
   // Auth
   login: (email: string, password: string) =>
-    request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+    request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   register: (email: string, name: string, password: string) =>
-    request('/auth/register', { method: 'POST', body: JSON.stringify({ email, name, password }) }),
-  getMe: () => request('/auth/me'),
-  updateProfile: (data: Record<string, any>) =>
-    request('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
+    request<LoginResponse>('/auth/register', { method: 'POST', body: JSON.stringify({ email, name, password }) }),
+  getMe: () => request<import('./types').User>('/auth/me'),
+  updateProfile: (data: Partial<import('./types').User>) =>
+    request<import('./types').User>('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
 
   // Transactions
-  getTransactions: () => request('/transactions'),
-  createTransaction: (data: any) =>
-    request('/transactions', { method: 'POST', body: JSON.stringify(data) }),
+  getTransactions: () => request<import('./types').Transaction[]>('/transactions'),
+  createTransaction: (data: TransactionInput) =>
+    request<import('./types').Transaction>('/transactions', { method: 'POST', body: JSON.stringify(data) }),
   deleteTransaction: (id: number) =>
-    request(`/transactions/${id}`, { method: 'DELETE' }),
+    request<{ success: boolean }>(`/transactions/${id}`, { method: 'DELETE' }),
 
   // Pockets
-  getPockets: () => request('/pockets'),
-  createPocket: (data: any) =>
-    request('/pockets', { method: 'POST', body: JSON.stringify(data) }),
+  getPockets: () => request<import('./types').Pocket[]>('/pockets'),
+  createPocket: (data: PocketInput) =>
+    request<import('./types').Pocket>('/pockets', { method: 'POST', body: JSON.stringify(data) }),
   deletePocket: (id: number) =>
-    request(`/pockets/${id}`, { method: 'DELETE' }),
+    request<{ success: boolean }>(`/pockets/${id}`, { method: 'DELETE' }),
 
   // Goals
-  getGoals: () => request('/goals'),
-  createGoal: (data: any) =>
-    request('/goals', { method: 'POST', body: JSON.stringify(data) }),
-  updateGoal: (id: number, attuale: number) =>
-    request(`/goals/${id}`, { method: 'PATCH', body: JSON.stringify({ attuale }) }),
+  getGoals: () => request<import('./types').Goal[]>('/goals'),
+  createGoal: (data: GoalInput) =>
+    request<import('./types').Goal>('/goals', { method: 'POST', body: JSON.stringify(data) }),
+  updateGoal: (id: number, delta: number) =>
+    request<import('./types').Goal>(`/goals/${id}`, { method: 'PATCH', body: JSON.stringify({ delta }) }),
   deleteGoal: (id: number) =>
-    request(`/goals/${id}`, { method: 'DELETE' }),
+    request<{ success: boolean }>(`/goals/${id}`, { method: 'DELETE' }),
 
   // Categories
-  getCategories: () => request('/categories'),
-  createCategory: (data: any) =>
-    request('/categories', { method: 'POST', body: JSON.stringify(data) }),
+  getCategories: () => request<import('./types').Category[]>('/categories'),
+  createCategory: (data: CategoryInput) =>
+    request<import('./types').Category>('/categories', { method: 'POST', body: JSON.stringify(data) }),
 
   // Budgets
-  getBudgets: () => request('/budgets'),
+  getBudgets: () => request<import('./types').CategoryBudget[]>('/budgets'),
   setBudget: (categoria: string, budget: number) =>
-    request('/budgets', { method: 'PUT', body: JSON.stringify({ categoria, budget }) }),
+    request<{ success: boolean }>('/budgets', { method: 'PUT', body: JSON.stringify({ categoria, budget }) }),
   deleteBudget: (categoria: string) =>
-    request(`/budgets/${encodeURIComponent(categoria)}`, { method: 'DELETE' }),
+    request<{ success: boolean }>(`/budgets/${encodeURIComponent(categoria)}`, { method: 'DELETE' }),
 }

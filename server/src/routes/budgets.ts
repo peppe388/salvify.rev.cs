@@ -8,7 +8,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const budgets = await prisma.categoryBudget.findMany({ where: { userId: req.userId } })
     res.json(budgets)
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('GetBudgets error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 router.put('/', async (req: AuthRequest, res: Response) => {
@@ -30,7 +30,7 @@ router.put('/', async (req: AuthRequest, res: Response) => {
       })
       res.status(201).json(created)
     }
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('SetBudget error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 router.delete('/:categoria', async (req: AuthRequest, res: Response) => {
@@ -40,7 +40,7 @@ router.delete('/:categoria', async (req: AuthRequest, res: Response) => {
     })
     if (existing) await prisma.categoryBudget.delete({ where: { id: existing.id } })
     res.json({ success: true })
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('DeleteBudget error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 export default router

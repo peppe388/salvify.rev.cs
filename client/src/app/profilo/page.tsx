@@ -1,21 +1,32 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { api } from '@/lib/api'
-import { Transaction, Category, Goal, CategoryBudget } from '@/lib/types'
-import BottomNav from '@/components/BottomNav'
+import { CategoryBudget } from '@/lib/types'
+import AppShell from '@/components/AppShell'
 import GoalCard from '@/components/GoalCard'
-import { LogOut, RotateCcw } from 'lucide-react'
+import { Card } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
+import { SkeletonCard } from '@/components/ui/Skeleton'
+import { AuthGuard } from '@/components/AuthGuard'
+import { LogOut, RotateCcw, Target, Wallet, PiggyBank } from 'lucide-react'
 
 export default function ProfiloPage() {
-  const { user, loading: authLoading, logout, refreshUser } = useAuth()
+  return (
+    <AuthGuard>
+      <ProfiloContent />
+    </AuthGuard>
+  )
+}
+
+function ProfiloContent() {
+  const { user, logout, refreshUser } = useAuth()
   const router = useRouter()
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [goals, setGoals] = useState<Goal[]>([])
-  const [budgets, setBudgets] = useState<Record<string, CategoryBudget>>({})
-  const [loadingData, setLoadingData] = useState(true)
+  const queryClient = useQueryClient()
 
   const [name, setName] = useState('')
   const [currency, setCurrency] = useState('€')
@@ -24,14 +35,29 @@ export default function ProfiloPage() {
   const [roundUp, setRoundUp] = useState(false)
   const [hide, setHide] = useState(false)
 
-  // Goals form
   const [goalName, setGoalName] = useState('')
   const [goalTarget, setGoalTarget] = useState('')
   const [goalDate, setGoalDate] = useState('')
 
-  useEffect(() => {
-    if (!authLoading && !user) router.push('/login')
-  }, [user, authLoading, router])
+  const { data: transactions = [] } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: api.getTransactions,
+  })
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: api.getCategories,
+  })
+
+  const { data: goals = [], isLoading: goalsLoading } = useQuery({
+    queryKey: ['goals'],
+    queryFn: api.getGoals,
+  })
+
+  const { data: budgetList = [] } = useQuery({
+    queryKey: ['budgets'],
+    queryFn: api.getBudgets,
+  })
 
   useEffect(() => {
     if (!user) return
@@ -41,167 +67,175 @@ export default function ProfiloPage() {
     setAutoLock(user.autoLock)
     setRoundUp(user.roundUp)
     setHide(user.hideBalance)
-    Promise.all([
-      api.getTransactions(),
-      api.getCategories(),
-      api.getGoals(),
-      api.getBudgets(),
-    ]).then(([t, c, g, b]) => {
-      setTransactions(t)
-      setCategories(c)
-      setGoals(g)
-      const bMap: Record<string, CategoryBudget> = {}
-      b.forEach((item: CategoryBudget) => { bMap[item.categoria] = item })
-      setBudgets(bMap)
-    }).finally(() => setLoadingData(false))
   }, [user])
 
-  async function saveSettings() {
-    await api.updateProfile({ name, currency, budget, autoLock, roundUp, hideBalance: hide })
-    await refreshUser()
+  const BudgetMap: Record<string, CategoryBudget> = {}
+  budgetList.forEach((item: CategoryBudget) => { BudgetMap[item.categoria] = item })
+
+  const updateProfileMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => api.updateProfile(data),
+    onSuccess: () => refreshUser(),
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  const createGoalMutation = useMutation({
+    mutationFn: (data: { nome: string; target: number; scadenza: string }) => api.createGoal(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] })
+      toast.success('Obiettivo creato')
+      setGoalName(''); setGoalTarget(''); setGoalDate('')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  const deleteGoalMutation = useMutation({
+    mutationFn: (id: number) => api.deleteGoal(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] })
+      toast.success('Obiettivo eliminato')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  const updateGoalMutation = useMutation({
+    mutationFn: ({ id, delta }: { id: number; delta: number }) => api.updateGoal(id, delta),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] })
+      toast.success('Obiettivo aggiornato')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  function saveSettings() {
+    updateProfileMutation.mutate({ name, currency, budget, autoLock, roundUp: Boolean(roundUp), hideBalance: Boolean(hide) })
   }
 
-  async function handleLogout() {
-    logout()
-    router.push('/login')
-  }
+  function handleLogout() { logout(); router.push('/login') }
 
   async function handleReset() {
-    if (!confirm('Sei sicuro? Tutti i dati verranno cancellati!')) return
-    const txs = await api.getTransactions()
-    for (const t of txs) await api.deleteTransaction(t.id).catch(() => {})
-    const pks = await api.getPockets()
-    for (const p of pks) await api.deletePocket(p.id).catch(() => {})
-    const gls = await api.getGoals()
-    for (const g of gls) await api.deleteGoal(g.id).catch(() => {})
-    window.location.reload()
+    if (!window.confirm('Sei sicuro? Tutti i dati verranno cancellati!')) return
+    for (const t of await api.getTransactions()) await api.deleteTransaction(t.id).catch(() => {})
+    for (const p of await api.getPockets()) await api.deletePocket(p.id).catch(() => {})
+    for (const g of await api.getGoals()) await api.deleteGoal(g.id).catch(() => {})
+    toast.success('Dati cancellati')
+    queryClient.invalidateQueries()
   }
 
-  async function handleAddGoal() {
-    if (!goalName.trim() || !goalTarget || !goalDate) { alert('Compila tutti i campi'); return }
-    const g = await api.createGoal({ nome: goalName.trim(), target: parseFloat(goalTarget), scadenza: goalDate })
-    setGoals(prev => [...prev, g])
-    setGoalName(''); setGoalTarget(''); setGoalDate('')
+  function handleAddGoal() {
+    if (!goalName.trim() || !goalTarget || !goalDate) { toast.error('Compila tutti i campi'); return }
+    createGoalMutation.mutate({ nome: goalName.trim(), target: parseFloat(goalTarget), scadenza: goalDate })
   }
 
-  async function handleDeleteGoal(id: number) {
-    if (!confirm('Eliminare questo obiettivo?')) return
-    await api.deleteGoal(id)
-    setGoals(prev => prev.filter(g => g.id !== id))
+  function handleDeleteGoal(id: number) {
+    if (!window.confirm('Eliminare questo obiettivo?')) return
+    deleteGoalMutation.mutate(id)
   }
 
-  async function handleAddToGoal(id: number, amount: number) {
-    await api.updateGoal(id, amount)
-    setGoals(prev => prev.map(g => g.id === id ? { ...g, attuale: g.attuale + amount } : g))
+  function handleAddToGoal(id: number, amount: number) {
+    updateGoalMutation.mutate({ id, delta: amount })
   }
 
   async function handleSetBudget(cat: string, val: string) {
     const v = parseFloat(val)
-    if (v > 0) {
-      await api.setBudget(cat, v)
-      setBudgets(prev => ({ ...prev, [cat]: { id: 0, userId: 0, categoria: cat, budget: v } }))
-    } else {
-      await api.deleteBudget(cat)
-      setBudgets(prev => { const n = { ...prev }; delete n[cat]; return n })
+    try {
+      if (v > 0) {
+        await api.setBudget(cat, v)
+      } else {
+        await api.deleteBudget(cat)
+      }
+      queryClient.invalidateQueries({ queryKey: ['budgets'] })
+      toast.success('Budget aggiornato')
+    } catch (err: any) {
+      toast.error(err.message)
     }
   }
 
-  const currencySym = currency
-  const fmt = (n: number) => `${currencySym} ${n.toLocaleString('it-IT', { minimumFractionDigits: 2 })}`
+  const fmt = (n: number) => `${currency} ${n.toLocaleString('it-IT', { minimumFractionDigits: 2 })}`
   const uscitaCats = categories.filter(c => c.tipo === 'uscita')
 
-  if (authLoading || loadingData) {
+  if (goalsLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#05050a]">
-        <div className="w-10 h-10 border-2 border-[#7c3aed] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-bg">
+        <div className="max-w-2xl mx-auto px-5 pt-5 pb-28 space-y-4">
+          <div className="h-6 w-32 skeleton-shimmer rounded-lg" />
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#05050a] pb-[80px]">
-      <div className="max-w-md mx-auto px-4 pt-6">
-        <h2 className="text-base font-bold text-[#f1f5f9] mb-4">Profilo</h2>
+    <AppShell>
+      <div className="animate-fade-in">
+        <h2 className="text-lg font-bold text-text mb-5">Profilo</h2>
 
-        {/* Settings */}
-        <div className="bg-[rgba(20,20,30,0.85)] backdrop-blur-xl border border-[rgba(255,255,255,0.06)] rounded-[18px] p-4 mb-4">
-          <div className="divide-y divide-[rgba(255,255,255,0.06)]">
-            <div className="py-3.5 flex justify-between items-center">
-              <label className="text-sm text-[#f1f5f9] font-medium">Nome profilo</label>
+        <Card className="!p-5 mb-4">
+          <h3 className="text-sm font-semibold text-text mb-4 flex items-center gap-2">
+            <Wallet size={16} className="text-brand-500" />
+            Impostazioni
+          </h3>
+          <div className="divide-y divide-border">
+            <SettingRow label="Nome profilo">
               <input type="text" value={name} onChange={e => setName(e.target.value)} onBlur={saveSettings}
-                className="max-w-[140px] px-2.5 py-1.5 rounded-lg text-sm bg-black/20 border border-[rgba(255,255,255,0.06)] text-[#f1f5f9] outline-none focus:border-[#7c3aed] text-right" />
-            </div>
-            <div className="py-3.5 flex justify-between items-center">
-              <label className="text-sm text-[#f1f5f9] font-medium">Valuta</label>
+                className="w-36 px-2.5 py-1.5 rounded-lg text-sm bg-surface-hover border border-border text-text text-right outline-none focus:border-brand-500" />
+            </SettingRow>
+            <SettingRow label="Valuta">
               <select value={currency} onChange={e => setCurrency(e.target.value)} onBlur={saveSettings}
-                className="max-w-[130px] px-2.5 py-1.5 rounded-lg text-sm bg-black/20 border border-[rgba(255,255,255,0.06)] text-[#f1f5f9] outline-none focus:border-[#7c3aed]">
+                className="w-28 px-2.5 py-1.5 rounded-lg text-sm bg-surface-hover border border-border text-text outline-none focus:border-brand-500">
                 <option value="€">€ Euro</option>
                 <option value="$">$ Dollaro</option>
                 <option value="£">£ Sterlina</option>
               </select>
-            </div>
-            <div className="py-3.5 flex justify-between items-center">
-              <label className="text-sm text-[#f1f5f9] font-medium">Budget mensile</label>
+            </SettingRow>
+            <SettingRow label="Budget mensile">
               <input type="number" value={budget || ''} onChange={e => setBudget(parseFloat(e.target.value) || 0)} onBlur={saveSettings} placeholder="0"
-                className="max-w-[110px] px-2.5 py-1.5 rounded-lg text-sm bg-black/20 border border-[rgba(255,255,255,0.06)] text-[#f1f5f9] outline-none focus:border-[#7c3aed] text-right" />
-            </div>
-            <div className="py-3.5 flex justify-between items-center">
-              <label className="text-sm text-[#f1f5f9] font-medium">Arrotondamento</label>
-              <button
-                onClick={async () => { setRoundUp(!roundUp); await api.updateProfile({ roundUp: !roundUp }); await refreshUser() }}
-                className={`w-[42px] h-[22px] rounded-full relative transition-colors ${roundUp ? 'bg-[#7c3aed]' : 'bg-[rgba(255,255,255,0.1)]'}`}
-              >
-                <span className={`absolute top-[2px] left-[2px] w-[18px] h-[18px] bg-white rounded-full transition-transform ${roundUp ? 'translate-x-5' : ''}`} />
-              </button>
-            </div>
-            <div className="py-3.5 flex justify-between items-center">
-              <label className="text-sm text-[#f1f5f9] font-medium">Blocco automatico</label>
+                className="w-28 px-2.5 py-1.5 rounded-lg text-sm bg-surface-hover border border-border text-text text-right outline-none focus:border-brand-500" />
+            </SettingRow>
+            <SettingRow label="Arrotondamento">
+              <Toggle checked={roundUp} onChange={() => { setRoundUp(!roundUp); updateProfileMutation.mutate({ roundUp: !roundUp }) }} />
+            </SettingRow>
+            <SettingRow label="Blocco automatico">
               <select value={autoLock} onChange={e => setAutoLock(parseInt(e.target.value))} onBlur={saveSettings}
-                className="max-w-[110px] px-2.5 py-1.5 rounded-lg text-sm bg-black/20 border border-[rgba(255,255,255,0.06)] text-[#f1f5f9] outline-none focus:border-[#7c3aed]">
+                className="w-28 px-2.5 py-1.5 rounded-lg text-sm bg-surface-hover border border-border text-text outline-none focus:border-brand-500">
                 <option value={30}>30s</option>
                 <option value={60}>1 min</option>
                 <option value={300}>5 min</option>
                 <option value={0}>Mai</option>
               </select>
-            </div>
-            <div className="py-3.5 flex justify-between items-center">
-              <label className="text-sm text-[#f1f5f9] font-medium">Nascondi saldo</label>
-              <button
-                onClick={async () => { setHide(!hide); await api.updateProfile({ hideBalance: !hide }); await refreshUser() }}
-                className={`w-[42px] h-[22px] rounded-full relative transition-colors ${hide ? 'bg-[#7c3aed]' : 'bg-[rgba(255,255,255,0.1)]'}`}
-              >
-                <span className={`absolute top-[2px] left-[2px] w-[18px] h-[18px] bg-white rounded-full transition-transform ${hide ? 'translate-x-5' : ''}`} />
-              </button>
-            </div>
+            </SettingRow>
+            <SettingRow label="Nascondi saldo">
+              <Toggle checked={hide} onChange={() => { setHide(!hide); updateProfileMutation.mutate({ hideBalance: !hide }) }} />
+            </SettingRow>
           </div>
-        </div>
+        </Card>
 
-        {/* Budget per categoria */}
-        <div className="bg-[rgba(20,20,30,0.85)] backdrop-blur-xl border border-[rgba(255,255,255,0.06)] rounded-[18px] p-4 mb-4">
-          <h3 className="text-sm font-semibold text-[#f1f5f9] mb-3">Budget per categoria</h3>
+        <Card className="!p-5 mb-4">
+          <h3 className="text-sm font-semibold text-text mb-4 flex items-center gap-2">
+            <PiggyBank size={16} className="text-brand-500" />
+            Budget per categoria
+          </h3>
           {uscitaCats.map(c => {
-            const budgetVal = budgets[c.nome]?.budget || 0
+            const budgetVal = BudgetMap[c.nome]?.budget || 0
             const speso = transactions.filter(t => t.categoria === c.nome && t.tipo === 'uscita' && !t.isRoundUp).reduce((s, t) => s + t.importo, 0)
             const pct = budgetVal > 0 ? Math.min(100, (speso / budgetVal) * 100) : 0
             return (
-              <div key={c.id} className="mb-3">
-                <div className="flex justify-between text-xs text-[rgba(255,255,255,0.55)] mb-1">
-                  <span className="font-medium text-[#f1f5f9]">{c.icona} {c.nome}</span>
+              <div key={c.id} className="mb-3.5">
+                <div className="flex justify-between text-xs text-text-muted mb-1">
+                  <span className="font-medium text-text">{c.icona} {c.nome}</span>
                   <span>{budgetVal > 0 ? `${fmt(speso)} / ${fmt(budgetVal)}` : '—'}</span>
                 </div>
                 {budgetVal > 0 && (
-                  <div className="h-1.5 bg-[rgba(255,255,255,0.06)] rounded-full overflow-hidden mb-1">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: speso > budgetVal ? '#ef4444' : '#10b981' }} />
+                  <div className="h-1.5 bg-border rounded-full overflow-hidden mb-1.5">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: speso > budgetVal ? 'var(--color-danger)' : 'var(--color-success)' }} />
                   </div>
                 )}
-                <div className="flex gap-1.5 items-center">
-                  <input
-                    type="number" defaultValue={budgetVal || ''} placeholder="Budget"
-                    onBlur={e => handleSetBudget(c.nome, e.target.value)}
-                    className="flex-1 px-2 py-1 rounded-lg text-xs bg-black/20 border border-[rgba(255,255,255,0.06)] text-[#f1f5f9] outline-none focus:border-[#7c3aed]"
-                  />
+                <div className="flex gap-2 items-center">
+                  <input type="number" defaultValue={budgetVal || ''} placeholder="Budget" onBlur={e => handleSetBudget(c.nome, e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 rounded-lg text-xs bg-surface-hover border border-border text-text outline-none focus:border-brand-500" />
                   {budgetVal > 0 && (
-                    <span className={`text-[10px] ${speso > budgetVal ? 'text-[#ef4444]' : 'text-[rgba(255,255,255,0.55)]'}`}>
+                    <span className={`text-xs font-medium ${speso > budgetVal ? 'text-danger' : 'text-text-muted'}`}>
                       {speso > budgetVal ? '⚠ Superato' : `${(budgetVal - speso).toFixed(0)}€ rimasti`}
                     </span>
                   )}
@@ -209,41 +243,58 @@ export default function ProfiloPage() {
               </div>
             )
           })}
-        </div>
+        </Card>
 
-        {/* Goals */}
-        <div className="mb-4">
+        <div className="mb-5">
+          <h3 className="text-sm font-semibold text-text mb-3 flex items-center gap-2">
+            <Target size={16} className="text-brand-500" />
+            Obiettivi di risparmio
+          </h3>
           {goals.map(g => (
             <GoalCard key={g.id} goal={g} currency={currency} onDelete={handleDeleteGoal} onAdd={handleAddToGoal} hideAmount={hide} />
           ))}
-          <div className="bg-[rgba(20,20,30,0.85)] backdrop-blur-xl border border-[rgba(255,255,255,0.06)] rounded-[18px] p-[18px]">
-            <h3 className="text-sm font-semibold text-[#f1f5f9] mb-3">Nuovo obiettivo</h3>
+          <Card className="!p-5">
+            <h4 className="text-sm font-semibold text-text mb-4">Nuovo obiettivo</h4>
             <div className="space-y-3">
-              <input type="text" value={goalName} onChange={e => setGoalName(e.target.value)} placeholder="Es. Vacanza, iPhone..."
-                className="w-full px-3 py-2.5 rounded-lg text-sm bg-[rgba(20,20,30,0.85)] border border-[rgba(255,255,255,0.06)] text-[#f1f5f9] outline-none focus:border-[#7c3aed]" />
-              <input type="number" value={goalTarget} onChange={e => setGoalTarget(e.target.value)} placeholder="1000" step="0.01" min="0"
-                className="w-full px-3 py-2.5 rounded-lg text-sm bg-[rgba(20,20,30,0.85)] border border-[rgba(255,255,255,0.06)] text-[#f1f5f9] outline-none focus:border-[#7c3aed]" />
-              <input type="date" value={goalDate} onChange={e => setGoalDate(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg text-sm bg-[rgba(20,20,30,0.85)] border border-[rgba(255,255,255,0.06)] text-[#f1f5f9] outline-none focus:border-[#7c3aed]" />
-              <button onClick={handleAddGoal}
-                className="w-full py-3 rounded-lg font-bold text-sm bg-gradient-to-r from-[#7c3aed] to-[#a78bfa] text-white shadow-lg shadow-[rgba(124,58,237,0.3)] hover:shadow-xl transition-all">
+              <Input value={goalName} onChange={e => setGoalName(e.target.value)} placeholder="Es. Vacanza, iPhone..." />
+              <Input type="number" value={goalTarget} onChange={e => setGoalTarget(e.target.value)} placeholder="Importo target" step="0.01" min="0" />
+              <Input type="date" value={goalDate} onChange={e => setGoalDate(e.target.value)} />
+              <Button onClick={handleAddGoal} loading={createGoalMutation.isPending} className="w-full">
                 Crea obiettivo
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         </div>
 
-        {/* Actions */}
         <div className="flex gap-3 mb-8">
-          <button onClick={handleReset} className="flex items-center justify-center gap-2 flex-1 py-3 rounded-lg font-semibold text-sm bg-[rgba(239,68,68,0.15)] text-[#ef4444] border border-[rgba(239,68,68,0.2)] hover:bg-[rgba(239,68,68,0.25)] transition-all">
+          <Button variant="danger" onClick={handleReset} className="flex-1">
             <RotateCcw size={14} /> Reset dati
-          </button>
-          <button onClick={handleLogout} className="flex items-center justify-center gap-2 flex-1 py-3 rounded-lg font-semibold text-sm bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.7)] hover:bg-[rgba(255,255,255,0.1)] transition-all">
+          </Button>
+          <Button variant="secondary" onClick={handleLogout} className="flex-1">
             <LogOut size={14} /> Esci
-          </button>
+          </Button>
         </div>
       </div>
-      <BottomNav />
+    </AppShell>
+  )
+}
+
+function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="py-3.5 flex justify-between items-center">
+      <label className="text-sm text-text font-medium">{label}</label>
+      {children}
     </div>
+  )
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  return (
+    <button
+      onClick={onChange}
+      className={`w-11 h-[24px] rounded-full relative transition-colors ${checked ? 'bg-brand-500' : 'bg-border'}`}
+    >
+      <span className={`absolute top-[2px] left-[2px] w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${checked ? 'translate-x-[22px]' : ''}`} />
+    </button>
   )
 }

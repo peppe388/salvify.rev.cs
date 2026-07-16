@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { Goal } from '@/lib/types'
+import { Trash2, Plus } from 'lucide-react'
 
 export default function GoalCard({
   goal,
@@ -28,28 +29,38 @@ export default function GoalCard({
   }
 
   return (
-    <div className="bg-[rgba(20,20,30,0.85)] backdrop-blur-xl border border-[rgba(255,255,255,0.06)] rounded-[18px] p-[18px] mb-3">
+    <div className="bg-surface border border-border rounded-xl p-4 mb-3">
       <div className="flex justify-between items-start">
-        <div>
-          <h3 className="text-sm text-[#f1f5f9] font-semibold mb-1">{goal.nome}</h3>
-          <div className="text-[11px] text-[rgba(255,255,255,0.55)]">
-            {fmt(goal.attuale)} di {hideAmount ? '•'.repeat(8) : fmt(goal.target)} · {daysLeft > 0 ? `${daysLeft} giorni` : 'Scaduto'}
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-semibold text-text mb-0.5">{goal.nome}</h3>
+          <div className="text-xs text-text-muted">
+            {fmt(goal.attuale)} di {hideAmount ? '•'.repeat(8) : fmt(goal.target)}
+            <span className="text-text-dim"> · {daysLeft > 0 ? `${daysLeft} giorni rimasti` : 'Scaduto'}</span>
           </div>
         </div>
-        <button onClick={() => onDelete(goal.id)} className="text-[rgba(255,255,255,0.3)] hover:bg-[rgba(239,68,68,0.2)] hover:text-[#ef4444] p-1 rounded-md transition-all text-sm">✕</button>
+        <button onClick={() => onDelete(goal.id)}
+          className="text-text-dim hover:bg-danger/20 hover:text-danger p-1.5 rounded-lg transition-all">
+          <Trash2 size={14} />
+        </button>
       </div>
-      <div className="h-2 bg-[rgba(255,255,255,0.06)] rounded-full overflow-hidden my-2">
-        <div className="h-full rounded-full bg-gradient-to-r from-[#7c3aed] to-[#10b981] transition-all duration-700" style={{ width: `${pct}%` }} />
+      <div className="h-2 bg-border rounded-full overflow-hidden my-2.5">
+        <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-success transition-all duration-700" style={{ width: `${pct}%` }} />
       </div>
-      <div className="text-xs font-semibold text-[#7c3aed] text-right mb-2">{hideAmount ? '•%' : `${pct.toFixed(0)}%`}</div>
-      <div className="flex gap-1.5">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-brand-500">{hideAmount ? '•%' : `${pct.toFixed(0)}%`}</span>
+        <span className="text-xs text-text-muted">{daysLeft > 0 ? `${daysLeft}g` : '—'}</span>
+      </div>
+      <div className="flex gap-2">
         <input
           type="number" value={amount} onChange={e => setAmount(e.target.value)}
           placeholder="+€" step="0.01" min="0"
-          className="flex-1 px-2.5 py-2 rounded-lg text-sm bg-black/20 border border-[rgba(255,255,255,0.06)] text-[#f1f5f9] outline-none focus:border-[#7c3aed] transition-colors"
+          className="flex-1 px-2.5 py-2 rounded-lg text-sm bg-surface-hover border border-border text-text outline-none transition-colors placeholder:text-text-dim focus:border-brand-500"
           onKeyDown={e => e.key === 'Enter' && handleAdd()}
         />
-        <button onClick={handleAdd} className="px-4 py-2 rounded-lg font-semibold text-sm bg-gradient-to-r from-[#7c3aed] to-[#a78bfa] text-white transition-all hover:scale-105">+</button>
+        <button onClick={handleAdd}
+          className="w-9 h-9 rounded-lg bg-brand-500 text-white flex items-center justify-center hover:bg-brand-600 transition-all">
+          <Plus size={16} />
+        </button>
       </div>
     </div>
   )

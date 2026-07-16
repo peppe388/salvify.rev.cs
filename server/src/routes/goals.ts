@@ -11,7 +11,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       orderBy: { id: 'desc' }
     })
     res.json(goals)
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('GetGoals error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 router.post('/', async (req: AuthRequest, res: Response) => {
@@ -22,21 +22,21 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       data: { userId: req.userId!, nome, target, scadenza, attuale: 0 }
     })
     res.status(201).json(goal)
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('CreateGoal error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 router.patch('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const id = parseInt(String(req.params.id))
-    const { attuale } = req.body
+    const { delta } = req.body
     const goal = await prisma.goal.findUnique({ where: { id } })
     if (!goal || goal.userId !== req.userId) { res.status(404).json({ error: 'Not found' }); return }
     const updated = await prisma.goal.update({
       where: { id },
-      data: { attuale: (goal.attuale || 0) + attuale }
+      data: { attuale: (goal.attuale || 0) + delta }
     })
     res.json(updated)
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('UpdateGoal error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
@@ -46,7 +46,7 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
     if (!goal || goal.userId !== req.userId) { res.status(404).json({ error: 'Not found' }); return }
     await prisma.goal.delete({ where: { id } })
     res.json({ success: true })
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('DeleteGoal error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 export default router

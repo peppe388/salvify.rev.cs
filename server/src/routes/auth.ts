@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import prisma from '../lib/prisma'
-import { generateToken } from '../middleware/auth'
+import { generateToken, authMiddleware, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
@@ -24,9 +24,10 @@ router.post('/register', async (req: Request, res: Response) => {
     const token = generateToken(user.id)
     res.status(201).json({
       token,
-      user: { id: user.id, email: user.email, name: user.name, currency: user.currency }
+      user: { id: user.id, email: user.email, name: user.name, currency: user.currency, budget: user.budget, autoLock: user.autoLock, hideBalance: user.hideBalance, roundUp: user.roundUp }
     })
   } catch (err) {
+    console.error('Register error:', err)
     res.status(500).json({ error: 'Registration failed' })
   }
 })
@@ -51,14 +52,15 @@ router.post('/login', async (req: Request, res: Response) => {
     const token = generateToken(user.id)
     res.json({
       token,
-      user: { id: user.id, email: user.email, name: user.name, currency: user.currency }
+      user: { id: user.id, email: user.email, name: user.name, currency: user.currency, budget: user.budget, autoLock: user.autoLock, hideBalance: user.hideBalance, roundUp: user.roundUp }
     })
-  } catch {
+  } catch (err) {
+    console.error('Login error:', err)
     res.status(500).json({ error: 'Login failed' })
   }
 })
 
-router.get('/me', async (req: any, res: Response) => {
+router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
@@ -66,10 +68,10 @@ router.get('/me', async (req: any, res: Response) => {
     })
     if (!user) { res.status(404).json({ error: 'User not found' }); return }
     res.json(user)
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('GetMe error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
-router.put('/profile', async (req: any, res: Response) => {
+router.put('/profile', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { name, currency, budget, autoLock, hideBalance, roundUp } = req.body
     const data: any = {}
@@ -81,7 +83,7 @@ router.put('/profile', async (req: any, res: Response) => {
     if (roundUp !== undefined) data.roundUp = roundUp
     const user = await prisma.user.update({ where: { id: req.userId }, data })
     res.json(user)
-  } catch { res.status(500).json({ error: 'Failed to update profile' }) }
+  } catch (err) { console.error('UpdateProfile error:', err); res.status(500).json({ error: 'Failed to update profile' }) }
 })
 
 export default router

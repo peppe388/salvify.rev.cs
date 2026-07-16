@@ -1,196 +1,265 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
-import { Transaction, Category, Pocket } from '@/lib/types'
-import BottomNav from '@/components/BottomNav'
-import Fab from '@/components/Fab'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { motion } from 'framer-motion'
+import AppShell from '@/components/AppShell'
 import Card3D from '@/components/Card3D'
+import CardDrawer from '@/components/CardDrawer'
 import TransactionItem from '@/components/TransactionItem'
-import { Eye, EyeOff } from 'lucide-react'
+import { MonthlyChart } from '@/components/Charts'
+import { Logo } from '@/components/ui/Logo'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { Card } from '@/components/ui/Card'
+import { SkeletonCard, SkeletonList } from '@/components/ui/Skeleton'
+import { AuthGuard } from '@/components/AuthGuard'
+import { ArrowUpRight, ArrowDownRight, TrendingUp, ChevronRight } from 'lucide-react'
+
+const container = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.08 } as const,
+  },
+}
+
+const item = {
+  hidden: { opacity: 0, y: 16 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] as const } },
+}
 
 export default function DashboardPage() {
-  const { user, loading: authLoading, refreshUser } = useAuth()
+  return (
+    <AuthGuard>
+      <DashboardContent />
+    </AuthGuard>
+  )
+}
+
+function DashboardContent() {
+  const { user } = useAuth()
   const router = useRouter()
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
-  const [pockets, setPockets] = useState<Pocket[]>([])
-  const [hide, setHide] = useState(false)
-  const [loadingData, setLoadingData] = useState(true)
+  const queryClient = useQueryClient()
+  const [cardOpen, setCardOpen] = useState(false)
 
-  useEffect(() => {
-    if (!authLoading && !user) router.push('/login')
-  }, [user, authLoading, router])
+  const { data: transactions = [], isLoading } = useQuery({
+    queryKey: ['transactions'],
+    queryFn: api.getTransactions,
+  })
 
-  useEffect(() => {
-    if (!user) return
-    setHide(user.hideBalance)
-    Promise.all([
-      api.getTransactions(),
-      api.getCategories(),
-      api.getPockets(),
-    ]).then(([t, c, p]) => {
-      setTransactions(t)
-      setCategories(c)
-      setPockets(p)
-    }).finally(() => setLoadingData(false))
-  }, [user])
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.deleteTransaction(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      toast.success('Transazione eliminata')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+  function deleteTransaction(id: number) {
+    deleteMutation.mutate(id)
+  }
 
   const now = new Date()
   const thisMonth = now.getMonth()
   const thisYear = now.getFullYear()
-  const monthTransactions = transactions.filter(t => {
-    const d = new Date(t.data + 'T00:00:00')
-    return d.getMonth() === thisMonth && d.getFullYear() === thisYear && !t.isRoundUp
-  })
-  const monthIncome = monthTransactions.filter(t => t.tipo === 'entrata').reduce((s, t) => s + t.importo, 0)
-  const monthExpense = monthTransactions.filter(t => t.tipo === 'uscita').reduce((s, t) => s + t.importo, 0)
-  const balance = monthIncome - monthExpense
 
-  const totalIncome = transactions.filter(t => t.tipo === 'entrata' && !t.isRoundUp).reduce((s, t) => s + t.importo, 0)
-  const totalExpense = transactions.filter(t => t.tipo === 'uscita' && !t.isRoundUp).reduce((s, t) => s + t.importo, 0)
+  const filtered = transactions.filter(t => !t.isRoundUp)
+
+  const monthTx = filtered.filter(t => {
+    const d = new Date(t.data + 'T00:00:00')
+    return d.getMonth() === thisMonth && d.getFullYear() === thisYear
+  })
+
+  const monthIncome = monthTx.filter(t => t.tipo === 'entrata').reduce((s, t) => s + t.importo, 0)
+  const monthExpense = monthTx.filter(t => t.tipo === 'uscita').reduce((s, t) => s + t.importo, 0)
+
+  const prevMonth = thisMonth === 0 ? 11 : thisMonth - 1
+  const prevYear = thisMonth === 0 ? thisYear - 1 : thisYear
+  const prevTx = filtered.filter(t => {
+    const d = new Date(t.data + 'T00:00:00')
+    return d.getMonth() === prevMonth && d.getFullYear() === prevYear
+  })
+  const prevExpense = prevTx.filter(t => t.tipo === 'uscita').reduce((s, t) => s + t.importo, 0)
+  const expenseTrend = prevExpense > 0 ? ((monthExpense - prevExpense) / prevExpense) * 100 : 0
+
+  const totalIncome = filtered.filter(t => t.tipo === 'entrata').reduce((s, t) => s + t.importo, 0)
+  const totalExpense = filtered.filter(t => t.tipo === 'uscita').reduce((s, t) => s + t.importo, 0)
   const totalBalance = totalIncome - totalExpense
 
-  const recent = [...transactions].filter(t => !t.isRoundUp).sort((a, b) => b.id - a.id).slice(0, 5)
-
-  const currency = user?.currency || '€'
-  const fmt = (n: number) => `${currency} ${n.toLocaleString('it-IT', { minimumFractionDigits: 2 })}`
-
-  // Today spending
-  const today = new Date().toISOString().split('T')[0]
-  const todayExpenses = transactions.filter(t => t.data === today && t.tipo === 'uscita' && !t.isRoundUp)
-  const todayTotal = todayExpenses.reduce((s, t) => s + t.importo, 0)
-
-  // Budget
   const monthlyBudget = user?.budget || 0
   const budgetPct = monthlyBudget > 0 ? Math.min(100, (monthExpense / monthlyBudget) * 100) : 0
   const budgetRemaining = monthlyBudget - monthExpense
 
-  async function toggleHide() {
-    const newVal = !hide
-    setHide(newVal)
-    await api.updateProfile({ hideBalance: newVal })
-    await refreshUser()
-  }
+  const recent = [...filtered].sort((a, b) => b.id - a.id).slice(0, 5)
 
-  async function deleteTransaction(id: number) {
-    if (!confirm('Eliminare questa transazione?')) return
-    await api.deleteTransaction(id)
-    setTransactions(prev => prev.filter(t => t.id !== id))
-  }
+  const currency = user?.currency || '€'
+  const fmt = (n: number) => `${currency} ${n.toLocaleString('it-IT', { minimumFractionDigits: 2 })}`
 
-  if (authLoading || loadingData) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#05050a]">
-        <div className="w-10 h-10 border-2 border-[#7c3aed] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-bg">
+        <div className="max-w-2xl mx-auto px-5 pt-16 pb-28 space-y-6">
+          <div className="space-y-3 text-center">
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+          <SkeletonCard />
+          <SkeletonList count={4} />
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#05050a] pb-[80px]">
-      <div className="max-w-md mx-auto px-4 pt-6">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-5">
-          <h1 className="text-2xl font-extrabold bg-gradient-to-r from-[#f1f5f9] to-[#a78bfa] bg-clip-text text-transparent">
-            Salvify
-          </h1>
-          <div className="flex items-center gap-2.5">
-            <button onClick={toggleHide} className="text-[rgba(255,255,255,0.5)] hover:text-[rgba(255,255,255,0.8)] transition-colors">
-              {hide ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-            <div
+    <>
+    <AppShell>
+      <motion.div variants={container} initial="hidden" animate="show">
+        {/* Header minimal */}
+        <motion.div variants={item} className="flex items-center justify-between mb-8 pt-2">
+          <Logo size="sm" />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
               onClick={() => router.push('/profilo')}
-              className="w-9 h-9 rounded-full bg-gradient-to-br from-[#7c3aed] to-[#f59e0b] text-white flex items-center justify-center font-bold text-sm shadow-lg shadow-[rgba(124,58,237,0.2)] cursor-pointer"
+              className="w-8 h-8 rounded-full bg-brand-500 text-white flex items-center justify-center font-bold text-xs shadow-lg shadow-brand-500/30 hover:shadow-brand-500/50 hover:scale-105 transition-all"
             >
               {(user?.name || 'G')[0].toUpperCase()}
+            </button>
+          </div>
+        </motion.div>
+
+        {/* Saldo — HERO */}
+        <motion.div variants={item} className="text-center mb-8">
+          <p className="text-xs font-medium text-text-muted uppercase tracking-[2px] mb-2">Saldo disponibile</p>
+          <h1 className={`text-5xl md:text-6xl font-extrabold tracking-tight mb-2 ${totalBalance >= 0 ? 'text-text' : 'text-danger'}`}>
+            {fmt(totalBalance)}
+          </h1>
+          {monthExpense > 0 && (
+            <div className="flex items-center justify-center gap-1.5 text-xs">
+              <TrendingUp size={12} className={expenseTrend <= 0 ? 'text-success' : 'text-danger'} />
+              <span className={expenseTrend <= 0 ? 'text-success' : 'text-danger'}>
+                {expenseTrend <= 0 ? '-' : '+'}{Math.abs(expenseTrend).toFixed(1)}% rispetto al mese scorso
+              </span>
             </div>
-          </div>
-        </div>
-
-        {/* Card */}
-        <Card3D saldo={totalBalance} nome={user?.name || 'Giuseppe'} currency={currency} />
-
-        {/* Month summary */}
-        <div className="grid grid-cols-2 gap-2.5 mb-4">
-          <div className="bg-[rgba(20,20,30,0.85)] backdrop-blur-xl border border-[rgba(255,255,255,0.06)] rounded-xl p-3.5">
-            <div className="text-[11px] text-[rgba(255,255,255,0.3)] uppercase tracking-wider mb-1">Entrate</div>
-            <div className="text-lg font-bold text-[#10b981]">{hide ? '••••' : fmt(monthIncome)}</div>
-          </div>
-          <div className="bg-[rgba(20,20,30,0.85)] backdrop-blur-xl border border-[rgba(255,255,255,0.06)] rounded-xl p-3.5">
-            <div className="text-[11px] text-[rgba(255,255,255,0.3)] uppercase tracking-wider mb-1">Uscite</div>
-            <div className="text-lg font-bold text-[#ef4444]">{hide ? '••••' : fmt(monthExpense)}</div>
-          </div>
-        </div>
-
-        {/* Today spending */}
-        <div className="bg-[rgba(20,20,30,0.85)] backdrop-blur-xl border border-[rgba(255,255,255,0.06)] rounded-xl p-3.5 mb-4 flex items-center gap-3">
-          {todayTotal > 0 ? (
-            <>
-              <span className="text-2xl opacity-60">📌</span>
-              <div>
-                <div className="text-xs text-[rgba(255,255,255,0.55)]">Oggi</div>
-                <div className="text-sm font-medium text-[#f1f5f9]">Hai speso {fmt(todayTotal)}</div>
-              </div>
-            </>
-          ) : (
-            <>
-              <span className="text-2xl opacity-60">✅</span>
-              <div>
-                <div className="text-xs text-[rgba(255,255,255,0.55)]">Oggi</div>
-                <div className="text-sm font-medium text-[#f1f5f9]">Nessuna spesa oggi. Ottimo!</div>
-              </div>
-            </>
           )}
-        </div>
+        </motion.div>
+
+        {/* Carta */}
+        <motion.div variants={item} className="mb-8">
+          <Card3D
+            saldo={totalBalance}
+            nome={user?.name || 'Giuseppe'}
+            currency={currency}
+            userId={user?.id}
+            onClick={() => setCardOpen(true)}
+          />
+        </motion.div>
+
+        {/* Riepilogo mese inline */}
+        <motion.div variants={item} className="grid grid-cols-2 gap-3 mb-6">
+          <div className="bg-success/5 border border-success/10 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded-lg bg-success/15 flex items-center justify-center">
+                <ArrowUpRight size={14} className="text-success" />
+              </div>
+              <span className="text-xs text-text-muted uppercase tracking-wide">Entrate</span>
+            </div>
+            <div className="text-lg font-bold text-success">{fmt(monthIncome)}</div>
+            <div className="text-xs text-text-dim mt-0.5">Questo mese</div>
+          </div>
+          <div className="bg-danger/5 border border-danger/10 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded-lg bg-danger/15 flex items-center justify-center">
+                <ArrowDownRight size={14} className="text-danger" />
+              </div>
+              <span className="text-xs text-text-muted uppercase tracking-wide">Uscite</span>
+            </div>
+            <div className="text-lg font-bold text-danger">{fmt(monthExpense)}</div>
+            <div className="text-xs text-text-dim mt-0.5">Questo mese</div>
+          </div>
+        </motion.div>
 
         {/* Budget */}
         {monthlyBudget > 0 && (
-          <div className="mb-4">
-            <div className="flex justify-between text-xs text-[rgba(255,255,255,0.55)] mb-1">
-              <span className="font-semibold text-[#f1f5f9]">Budget mensile</span>
+          <motion.div variants={item} className="mb-6">
+            <div className="flex justify-between text-xs text-text-muted mb-2">
+              <span className="font-medium text-text">Budget mensile</span>
               <span>{fmt(monthExpense)} / {fmt(monthlyBudget)}</span>
             </div>
-            <div className="h-1.5 bg-[rgba(255,255,255,0.06)] rounded-full overflow-hidden">
-              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${budgetPct}%`, background: budgetRemaining > 0 ? '#10b981' : '#ef4444' }} />
+            <div className="h-2.5 bg-border rounded-full overflow-hidden">
+              <motion.div
+                className="h-full rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${budgetPct}%` }}
+                transition={{ duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
+                style={{ background: budgetRemaining > 0 ? 'var(--color-success)' : 'var(--color-danger)' }}
+              />
             </div>
-            <div className="text-[10px] font-semibold mt-1" style={{ color: budgetRemaining > 0 ? '#10b981' : '#ef4444' }}>
+            <div className="text-xs font-medium mt-1.5 text-text-muted">
               {budgetRemaining >= 0 ? `Rimangono ${fmt(budgetRemaining)}` : `Superato di ${fmt(Math.abs(budgetRemaining))}`}
             </div>
-          </div>
+          </motion.div>
         )}
 
-        {/* Recent transactions */}
-        <div className="bg-[rgba(20,20,30,0.85)] backdrop-blur-xl border border-[rgba(255,255,255,0.06)] rounded-[18px] p-4 mb-4">
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs font-semibold text-[rgba(255,255,255,0.55)]">Saldo totale</span>
-            <span className={`text-base font-bold ${totalBalance >= 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
-              {hide ? '••••••' : fmt(totalBalance)}
-            </span>
-          </div>
-        </div>
+        {/* Grafico mensile */}
+        <motion.div variants={item} className="mb-6">
+          <Card className="overflow-hidden">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-text">Statistiche mensili</h3>
+              <button onClick={() => router.push('/stats')} className="text-text-dim hover:text-text transition-colors">
+                <ChevronRight size={16} />
+              </button>
+            </div>
+            <MonthlyChart transactions={transactions} />
+          </Card>
+        </motion.div>
 
-        <div className="text-xs font-semibold text-[rgba(255,255,255,0.55)] mb-2.5">Ultime transazioni</div>
-        {recent.length === 0 ? (
-          <div className="text-center text-[rgba(255,255,255,0.3)] text-sm py-8">
-            <div className="text-4xl opacity-30 mb-3">📭</div>
-            Nessuna transazione ancora.<br />Aggiungine una!
-          </div>
-        ) : (
-          <>
-            {recent.map(t => (
-              <TransactionItem key={t.id} t={t} currency={currency} onDelete={deleteTransaction} hideAmount={hide} />
-            ))}
-            <button onClick={() => router.push('/movimenti')} className="block mx-auto mt-3 text-xs font-semibold text-[#7c3aed] bg-transparent border-none cursor-pointer">
-              Vedi tutte →
+        {/* Transazioni recenti */}
+        <motion.div variants={item}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-text">Transazioni recenti</h3>
+            <button onClick={() => router.push('/movimenti')} className="text-xs font-medium text-brand-500 hover:underline">
+              Vedi tutte
             </button>
-          </>
-        )}
-      </div>
-
-      <Fab />
-      <BottomNav />
-    </div>
+          </div>
+          {recent.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-14 h-14 rounded-2xl bg-surface border border-border flex items-center justify-center mx-auto mb-3">
+                <TrendingUp size={24} className="text-text-dim" />
+              </div>
+              <p className="text-sm text-text-muted">Nessuna transazione ancora</p>
+              <p className="text-xs text-text-dim mt-1">Aggiungine una con il pulsante + in basso</p>
+            </div>
+          ) : (
+            <div className="bg-surface border border-border rounded-2xl divide-y divide-border overflow-hidden">
+              {recent.map((t, i) => (
+                <motion.div
+                  key={t.id}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.3 + i * 0.05, duration: 0.3 }}
+                >
+                  <TransactionItem t={t} currency={currency} onDelete={deleteTransaction} hideAmount={false} />
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      </motion.div>
+    </AppShell>
+      <CardDrawer
+        open={cardOpen}
+        onClose={() => setCardOpen(false)}
+        transactions={transactions}
+        user={user!}
+        currency={currency}
+        deleteTransaction={deleteTransaction}
+        hide={user?.hideBalance || false}
+      />
+    </>
   )
 }

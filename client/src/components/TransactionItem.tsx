@@ -1,5 +1,11 @@
 'use client'
 import { Transaction } from '@/lib/types'
+import { Trash2 } from 'lucide-react'
+
+const categoryIcons: Record<string, string> = {
+  'Altro uscite': '🛒',
+  'Altro entrate': '💰',
+}
 
 export default function TransactionItem({
   t,
@@ -13,29 +19,33 @@ export default function TransactionItem({
   hideAmount?: boolean
 }) {
   const isIncome = t.tipo === 'entrata'
-  const color = isIncome ? '#10b981' : '#ef4444'
   const fmt = (n: number) => `${currency} ${n.toLocaleString('it-IT', { minimumFractionDigits: 2 })}`
-  const date = new Date(t.data + 'T00:00:00').toLocaleDateString('it-IT')
+  const date = new Date(t.data + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
 
   return (
-    <div className="flex justify-between items-center py-3.5 border-b border-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.02)] hover:-mx-1.5 hover:px-1.5 hover:rounded-lg transition-all group">
-      <div className="flex-1">
-        <div className="flex items-center gap-1.5 text-[11px] text-[rgba(255,255,255,0.55)]">
-          <span className="w-[7px] h-[7px] rounded-full inline-block" style={{ background: color }} />
-          <span>{t.categoria}</span>
-          <span className="text-[rgba(255,255,255,0.3)]">{date}</span>
-        </div>
-        <div className="text-sm font-medium text-[#f1f5f9] mt-0.5">{t.nota}</div>
+    <div className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-hover transition-all group last:rounded-b-2xl">
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm shrink-0 ${
+        isIncome ? 'bg-success/10' : 'bg-danger/10'
+      }`}>
+        {categoryIcons[t.categoria] || (isIncome ? '📥' : '📤')}
       </div>
-      <div className="flex items-center gap-1.5">
-        <div className={`text-sm font-bold ${isIncome ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-text truncate">{t.nota}</div>
+        <div className="flex items-center gap-2 text-xs text-text-muted mt-0.5">
+          <span>{t.categoria}</span>
+          <span className="w-1 h-1 rounded-full bg-text-dim" />
+          <span>{date}</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <div className={`text-sm font-bold ${isIncome ? 'text-success' : 'text-danger'}`}>
           {isIncome ? '+' : '-'}{hideAmount ? '••••' : fmt(t.importo)}
         </div>
         <button
           onClick={() => onDelete(t.id)}
-          className="text-[rgba(255,255,255,0.3)] hover:bg-[rgba(239,68,68,0.2)] hover:text-[#ef4444] p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all text-xs"
+          className="text-text-dim hover:bg-danger/20 hover:text-danger p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
         >
-          ✕
+          <Trash2 size={13} />
         </button>
       </div>
     </div>

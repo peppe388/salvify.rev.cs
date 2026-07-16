@@ -5,7 +5,13 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearSca
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
-const COLORS = ['#7c3aed', '#10b981', '#ef4444', '#f59e0b', '#ec4899', '#3b82f6', '#06b6d4', '#84cc16', '#f97316', '#8b5cf6', '#14b8a6', '#e11d48']
+const COLORS = ['#6C5CE7', '#00B894', '#E17055', '#FDCB6E', '#e84393', '#0984e3', '#00cec9', '#a29bfe', '#fdcb6e', '#6c5ce7', '#e17055', '#00b894']
+
+function getThemeColor(variable: string): string {
+  if (typeof document === 'undefined') return '#f1f2f6'
+  const val = getComputedStyle(document.documentElement).getPropertyValue(variable).trim()
+  return val || '#f1f2f6'
+}
 
 export function CategoryChart({ transactions, categories }: { transactions: Transaction[]; categories: Category[] }) {
   const uscite = transactions.filter(t => t.tipo === 'uscita' && !t.isRoundUp)
@@ -15,7 +21,7 @@ export function CategoryChart({ transactions, categories }: { transactions: Tran
   const values = Object.values(byCat)
 
   if (!labels.length) {
-    return <div className="text-center text-[rgba(255,255,255,0.3)] text-sm py-8">Nessun dato disponibile</div>
+    return <div className="text-center text-text-dim text-sm py-8">Nessun dato disponibile</div>
   }
 
   return (
@@ -27,7 +33,7 @@ export function CategoryChart({ transactions, categories }: { transactions: Tran
       options={{
         responsive: true,
         plugins: {
-          legend: { position: 'right', labels: { boxWidth: 10, padding: 8, font: { size: 11 }, color: 'rgba(255,255,255,0.7)' } },
+          legend: { position: 'right', labels: { boxWidth: 10, padding: 8, font: { size: 11 }, color: getThemeColor('--text-muted') } },
         },
       }}
     />
@@ -50,26 +56,29 @@ export function MonthlyChart({ transactions }: { transactions: Transaction[] }) 
   }
 
   if (!meses.length) {
-    return <div className="text-center text-[rgba(255,255,255,0.3)] text-sm py-8">Nessun dato disponibile</div>
+    return <div className="text-center text-text-dim text-sm py-8">Nessun dato disponibile</div>
   }
+
+  const textColor = getThemeColor('--text-muted')
+  const gridColor = getThemeColor('--border')
 
   return (
     <Bar
       data={{
         labels: meses.map(monthLabel),
         datasets: [
-          { label: 'Entrate', data: meses.map(m => entrateM[m] || 0), backgroundColor: '#10b981', borderRadius: 4 },
-          { label: 'Uscite', data: meses.map(m => usciteM[m] || 0), backgroundColor: '#ef4444', borderRadius: 4 },
+          { label: 'Entrate', data: meses.map(m => entrateM[m] || 0), backgroundColor: '#00B894', borderRadius: 4 },
+          { label: 'Uscite', data: meses.map(m => usciteM[m] || 0), backgroundColor: '#E17055', borderRadius: 4 },
         ],
       }}
       options={{
         responsive: true,
         plugins: {
-          legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 }, color: 'rgba(255,255,255,0.7)' } },
+          legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 }, color: textColor } },
         },
         scales: {
-          x: { ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 } }, grid: { color: 'transparent' } },
-          y: { ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+          x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: 'transparent' } },
+          y: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
         },
       }}
     />

@@ -11,7 +11,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       orderBy: { id: 'asc' }
     })
     res.json(pockets)
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('GetPockets error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 router.post('/', async (req: AuthRequest, res: Response) => {
@@ -22,7 +22,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       data: { userId: req.userId!, nome, colore: colore || 'purple', saldo: 0 }
     })
     res.status(201).json(pocket)
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('CreatePocket error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
@@ -32,7 +32,7 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
     if (!pocket || pocket.userId !== req.userId) { res.status(404).json({ error: 'Not found' }); return }
     await prisma.pocket.delete({ where: { id } })
     res.json({ success: true })
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('DeletePocket error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 export default router

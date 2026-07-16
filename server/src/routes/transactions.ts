@@ -17,11 +17,11 @@ const createSchema = z.object({
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const transactions = await prisma.transaction.findMany({
-      where: { userId: req.userId, isRoundUp: false },
+      where: { userId: req.userId },
       orderBy: { id: 'desc' }
     })
     res.json(transactions)
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('GetTransactions error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 router.post('/', async (req: AuthRequest, res: Response) => {
@@ -52,7 +52,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     const user = await prisma.user.findUnique({ where: { id: req.userId } })
     if (user?.roundUp && body.tipo === 'uscita') {
       const roundUp = Math.ceil(body.importo) - body.importo
-      if (roundUp > 0.01) {
+      if (roundUp >= 0.01) {
         const risparmio = await prisma.pocket.findFirst({
           where: { userId: req.userId, nome: 'Risparmio' }
         })
@@ -76,6 +76,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     res.status(201).json(t)
   } catch (err: any) {
     if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return }
+    console.error('CreateTransaction error:', err)
     res.status(500).json({ error: 'Failed to create transaction' })
   }
 })
@@ -96,7 +97,7 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
     }
     await prisma.transaction.delete({ where: { id } })
     res.json({ success: true })
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('DeleteTransaction error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 export default router

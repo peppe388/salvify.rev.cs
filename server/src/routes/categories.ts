@@ -30,7 +30,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       cats = await prisma.category.findMany({ where: { userId: req.userId } })
     }
     res.json(cats)
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('GetCategories error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 router.post('/', async (req: AuthRequest, res: Response) => {
@@ -41,7 +41,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       data: { userId: req.userId!, nome, icona, tipo }
     })
     res.status(201).json(cat)
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('CreateCategory error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
@@ -51,7 +51,7 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
     if (!cat || cat.userId !== req.userId) { res.status(404).json({ error: 'Not found' }); return }
     await prisma.category.delete({ where: { id } })
     res.json({ success: true })
-  } catch { res.status(500).json({ error: 'Failed' }) }
+  } catch (err) { console.error('DeleteCategory error:', err); res.status(500).json({ error: 'Failed' }) }
 })
 
 export default router

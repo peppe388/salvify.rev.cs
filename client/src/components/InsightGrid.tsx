@@ -43,13 +43,13 @@ export default function InsightGrid({
       {cards.map((card, i) => {
         const Icon = card.icon
         return (
-          <div key={i} className="bg-[rgba(20,20,30,0.85)] backdrop-blur-xl border border-[rgba(255,255,255,0.06)] rounded-xl p-3.5">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Icon size={12} className="text-[rgba(255,255,255,0.3)]" />
-              <div className="text-[10px] text-[rgba(255,255,255,0.3)] uppercase tracking-wide">{card.label}</div>
+          <div key={i} className="bg-surface border border-border rounded-xl p-3.5">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Icon size={12} className="text-text-dim" />
+              <div className="text-xs text-text-dim uppercase tracking-wide">{card.label}</div>
             </div>
-            <div className="text-base font-bold text-[#f1f5f9]">{card.value}</div>
-            {card.sub && <div className="text-[10px] text-[rgba(255,255,255,0.55)]">{card.sub}</div>}
+            <div className="text-base font-bold text-text">{card.value}</div>
+            {card.sub && <div className="text-xs text-text-muted mt-0.5">{card.sub}</div>}
           </div>
         )
       })}

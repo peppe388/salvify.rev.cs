@@ -1,7 +1,14 @@
 'use client'
 import { Pocket } from '@/lib/types'
+import { Trash2 } from 'lucide-react'
 
-const icons: Record<string, string> = { purple: '💜', gold: '⭐', green: '💚', pink: '🩷', blue: '💙' }
+const colorMap: Record<string, { bg: string; ring: string }> = {
+  purple: { bg: 'bg-brand-500/15', ring: 'ring-brand-500/30' },
+  gold: { bg: 'bg-warning/15', ring: 'ring-warning/30' },
+  green: { bg: 'bg-success/15', ring: 'ring-success/30' },
+  pink: { bg: 'bg-pink-500/15', ring: 'ring-pink-500/30' },
+  blue: { bg: 'bg-blue-500/15', ring: 'ring-blue-500/30' },
+}
 
 export default function PocketCard({
   pocket,
@@ -15,29 +22,28 @@ export default function PocketCard({
   hideAmount?: boolean
 }) {
   const fmt = (n: number) => `${currency} ${n.toLocaleString('it-IT', { minimumFractionDigits: 2 })}`
+  const c = colorMap[pocket.colore] || colorMap.purple
 
   return (
-    <div className="flex justify-between items-center bg-[rgba(20,20,30,0.85)] backdrop-blur-xl border border-[rgba(255,255,255,0.06)] rounded-[18px] p-4 mb-2.5 hover:border-[rgba(124,58,237,0.2)] transition-all group">
+    <div className="flex justify-between items-center bg-surface border border-border rounded-xl p-4 mb-2.5 hover:border-brand-500/30 transition-all group">
       <div className="flex items-center gap-3">
-        <div
-          className={`w-[42px] h-[42px] rounded-xl flex items-center justify-center text-lg ${pocket.colore === 'purple' ? 'bg-[rgba(124,58,237,0.2)]' : pocket.colore === 'gold' ? 'bg-[rgba(245,158,11,0.2)]' : pocket.colore === 'green' ? 'bg-[rgba(16,185,129,0.2)]' : pocket.colore === 'pink' ? 'bg-[rgba(236,72,153,0.2)]' : 'bg-[rgba(59,130,246,0.2)]'}`}
-        >
-          {icons[pocket.colore] || '💳'}
+        <div className={`w-10 h-10 rounded-xl ${c.bg} flex items-center justify-center text-base font-bold text-text ring-1 ${c.ring}`}>
+          {pocket.nome[0].toUpperCase()}
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-[#f1f5f9]">{pocket.nome}</h3>
-          <span className="text-[11px] text-[rgba(255,255,255,0.3)]">Saldo</span>
+          <h3 className="text-sm font-semibold text-text">{pocket.nome}</h3>
+          <span className="text-xs text-text-muted">Saldo disponibile</span>
         </div>
       </div>
-      <div className="flex items-center gap-0.5">
-        <div className="text-base font-bold text-[#f1f5f9]">
+      <div className="flex items-center gap-1">
+        <div className="text-base font-bold text-text">
           {hideAmount ? '••••' : fmt(pocket.saldo)}
         </div>
         <button
           onClick={() => onDelete(pocket.id)}
-          className="text-[rgba(255,255,255,0.3)] hover:bg-[rgba(239,68,68,0.2)] hover:text-[#ef4444] p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all text-sm"
+          className="text-text-dim hover:bg-danger/20 hover:text-danger p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
         >
-          ✕
+          <Trash2 size={14} />
         </button>
       </div>
     </div>

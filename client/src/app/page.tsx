@@ -14,8 +14,8 @@ export default function Home() {
   }, [user, loading, router])
 
   return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: '#05050a' }}>
-      <div className="w-12 h-12 border-2 border-[#7c3aed] border-t-transparent rounded-full animate-spin" />
+    <div className="min-h-screen bg-bg flex items-center justify-center">
+      <div className="w-10 h-10 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
     </div>
   )
 }
