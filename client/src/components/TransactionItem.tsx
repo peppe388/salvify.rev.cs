@@ -1,11 +1,7 @@
 'use client'
 import { Transaction } from '@/lib/types'
 import { Trash2 } from 'lucide-react'
-
-const categoryIcons: Record<string, string> = {
-  'Altro uscite': '🛒',
-  'Altro entrate': '💰',
-}
+import { getCategoryIcon, getCategoryColor } from '@/lib/categoryIcons'
 
 export default function TransactionItem({
   t,
@@ -19,15 +15,17 @@ export default function TransactionItem({
   hideAmount?: boolean
 }) {
   const isIncome = t.tipo === 'entrata'
+  const Icon = getCategoryIcon(t.categoria)
+  const colorClass = getCategoryColor(t.categoria, t.tipo)
   const fmt = (n: number) => `${currency} ${n.toLocaleString('it-IT', { minimumFractionDigits: 2 })}`
   const date = new Date(t.data + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
 
   return (
     <div className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-hover transition-all group last:rounded-b-2xl">
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm shrink-0 ${
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
         isIncome ? 'bg-success/10' : 'bg-danger/10'
       }`}>
-        {categoryIcons[t.categoria] || (isIncome ? '📥' : '📤')}
+        <Icon size={16} className={colorClass} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-text truncate">{t.nota}</div>

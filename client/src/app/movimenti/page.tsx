@@ -84,7 +84,7 @@ function MovimentiContent() {
             <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
               className="pl-8 pr-3 py-2.5 rounded-lg text-sm bg-surface border border-border text-text outline-none transition-colors focus:border-brand-500 appearance-none">
               <option value="all">Tutte</option>
-              {categories.map(c => <option key={c.id} value={c.nome}>{c.icona} {c.nome}</option>)}
+              {categories.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
             </select>
           </div>
         </div>

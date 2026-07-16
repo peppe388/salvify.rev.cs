@@ -7,3 +7,9 @@ dist/
 *.db-journal
 .DS_Store
 salvify-html-prototype.html
+*.log
+*.err
+server/server_out.log
+client/client_out.log
+client/client_err.log
+server/server_err.log

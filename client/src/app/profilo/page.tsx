@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/Input'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { AuthGuard } from '@/components/AuthGuard'
 import { LogOut, RotateCcw, Target, Wallet, PiggyBank } from 'lucide-react'
+import { getCategoryIcon, getCategoryColor } from '@/lib/categoryIcons'
 
 export default function ProfiloPage() {
   return (
@@ -223,7 +224,7 @@ function ProfiloContent() {
             return (
               <div key={c.id} className="mb-3.5">
                 <div className="flex justify-between text-xs text-text-muted mb-1">
-                  <span className="font-medium text-text">{c.icona} {c.nome}</span>
+                  <span className="font-medium text-text flex items-center gap-1.5">{(() => { const Icon = getCategoryIcon(c.nome); return <Icon size={14} className={getCategoryColor(c.nome, c.tipo)} /> })()}{c.nome}</span>
                   <span>{budgetVal > 0 ? `${fmt(speso)} / ${fmt(budgetVal)}` : '—'}</span>
                 </div>
                 {budgetVal > 0 && (

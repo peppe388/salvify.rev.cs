@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
@@ -8,7 +8,6 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
-
 export default function QuickAddModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
   const [tipo, setTipo] = useState('uscita')
@@ -29,8 +28,7 @@ export default function QuickAddModal({ onClose }: { onClose: () => void }) {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: { tipo: string; importo: number; categoria: string; nota: string; data: string; pocketId: number | null }) =>
-      api.createTransaction(data),
+    mutationFn: (data: any) => api.createTransaction(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['pockets'] })
@@ -75,7 +73,9 @@ export default function QuickAddModal({ onClose }: { onClose: () => void }) {
           <Input label="Importo" type="number" value={importo} onChange={e => setImporto(e.target.value)} placeholder="0.00" step="0.01" min="0" />
 
           <Select label="Categoria" value={categoria} onChange={e => setCategoria(e.target.value)}>
-            {filtered.map(c => <option key={c.id} value={c.nome}>{c.icona} {c.nome}</option>)}
+            {filtered.map(c => (
+              <option key={c.id} value={c.nome}>{c.nome}</option>
+            ))}
           </Select>
 
           <Select label="Pocket" value={pocketId} onChange={e => setPocketId(e.target.value)}>
